@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 
 
-FEEDWATER_VERSION='0.10.3'
+FEEDWATER_VERSION='0.1.0'
 
 
 with open("README.md", "r", encoding="utf-8") as readme_file:
