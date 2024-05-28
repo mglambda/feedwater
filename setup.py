@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 
 
-FEEDWATER_VERSION='0.1.0'
+FEEDWATER_VERSION='0.1.1'
 
 
 with open("README.md", "r", encoding="utf-8") as readme_file:
@@ -14,12 +14,12 @@ setup(
     url="https://github.com/mglambda/feedwater",
     author="Marius Gerdes",
     author_email="integr@gmail.com",
-    description="Spawn a process and feed data into its stdin continuously and concurrently, reading output whenever you want it.",
+    description="Spawn a process and feed data into its stdin continuously and concurrently, reading output whenever you want without blocking.",
     long_description=README,
     long_description_content_type="text/markdown",
     license_files=["LICENSE"],
     scripts=[],
     packages=find_packages(include=['feedwater']),
-    install_requires=[]
+    install_requires=["psutil"]
 )
 

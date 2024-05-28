@@ -1,7 +1,8 @@
-import subprocess, os, signal, threading
+import subprocess, os, signal, threading, sys, psutil
+import atexit
 from queue import Queue, Empty
 
-def run(cmd):
+def run(cmd, **kwargs):
     """Spawns a process with command CMD, executed in a shell environment in text mode. Returns a Process object. This function is non-blocking.
 
     Parameter
@@ -10,19 +11,20 @@ def run(cmd):
     Returns
     Process
     A Process object that can be queried for execution results, errors, its status, or to write to the underlying stdin."""
-    return Process(cmd)
+    return Process(cmd, **kwargs)
 
 # FIXME: in the future, add more functions that modify Process constructor arguments for e.g. binary mode, non-shell mode, etc
 
 class Process(object):
     """A subprocess that can run continuously and provides non-blocking interactions."""
 
-    def __init__(self, cmd):
+    def __init__(self, cmd, env=os.environ, verbose=False):
         """Initialize and start a subprocess.
 
         Paramter
         cmd : str
         A string that will be executed in a shell environment, in text mode."""
+        self.verbose = verbose
         self._proc = None
         self.stderr_log = Queue()
         self.stdout_log = Queue()
@@ -37,12 +39,30 @@ class Process(object):
         self._cmdstring = cmdstring
         self._proc = subprocess.Popen(self._cmdstring,
                                       text=True,
+                                      env=env,
                                       stdin=subprocess.PIPE,
                                       shell=True,
                                       preexec_fn=os.setsid,
                                       stdout=subprocess.PIPE,
                                       stderr=subprocess.PIPE)
 
+        # python has no proper destructors, so this is the workaround we use
+        # this is unnecessary for most programs, but becomes essential when subprocesses spawned with feedwater open their own threads etc.
+        # in case the feedwater-owning main program dies unexpectedly, those threads etc will keep spinning
+        # it's not fun if their spinning on some pytorch queue that's eating 12gigs of vram.
+        # using atexit is a tradeoff as it means the feedwater objects stick around until main program execution stops. but oh well
+        atexit.register(self.close)
+        # for debug
+        if self._proc:
+            self._pidstr = str(self._proc.pid)
+            self._gidstr = str(os.getpgid(self._proc.pid))
+        else:
+            self._pidstr = "N/A"
+            self._gidstr = "N/A"
+
+        if self.verbose:
+            print("feedwater: starting " + str(self._proc.pid) + " of group " + str(os.getpgid(self._proc.pid)) + " with command '" + self._cmdstring + "'.", file=sys.stderr)
+        
         self._threads_stop = threading.Event()
         t1 = threading.Thread(target=self._reader, args=[self._proc.stdout, self.stdout_log])
         t2 = threading.Thread(target=self._reader, args=[self._proc.stderr, self.stderr_log])
@@ -65,7 +85,7 @@ class Process(object):
     def _reader(self, stream, q):
         while w := stream.readline():
             q.put(w)
-            if self._threads_stop.isSet():
+            if self._threads_stop.is_set():
                 return
             
     def write_line(self, w):
@@ -130,11 +150,22 @@ class Process(object):
             return lines
         return lines
 
+    def _log(self, w):
+        print("feedwater: " + w, file=sys.stderr)
+    
     def close(self):
         # since shell=true spawns child processes that may still be running , we have to terminate by sending kill signal to entire process group
-        # FIXME: this doesn't work on windows
         if self._proc:
-            os.killpg(os.getpgid(self._proc.pid), signal.SIGTERM)
+            p = psutil.Process(self._proc.pid)
+            for child_process in p.children(recursive=True):
+                self._log("killing child " + str(child_process))
+                child_process.kill()
+
+            self._log("killing parent process " + str(p))
+            p.kill()
+
             self._proc = None
 
-
+    def __del__(self):
+        # this is not at all guaranteed to ever happen. thanks, guido!
+        self.close()
