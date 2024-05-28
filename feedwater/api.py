@@ -151,7 +151,8 @@ class Process(object):
         return lines
 
     def _log(self, w):
-        print("feedwater: " + w, file=sys.stderr)
+        if self.verbose:
+            print("feedwater: " + w, file=sys.stderr)
     
     def close(self):
         # since shell=true spawns child processes that may still be running , we have to terminate by sending kill signal to entire process group
