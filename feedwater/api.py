@@ -157,14 +157,22 @@ class Process(object):
     def close(self):
         # since shell=true spawns child processes that may still be running , we have to terminate by sending kill signal to entire process group
         if self._proc:
-            p = psutil.Process(self._proc.pid)
-            for child_process in p.children(recursive=True):
-                self._log("killing child " + str(child_process))
-                child_process.kill()
+            try:
+                p = psutil.Process(self._proc.pid)                
+                for child_process in p.children(recursive=True):
+                    self._log("killing child " + str(child_process))
+                    child_process.kill()
 
-            self._log("killing parent process " + str(p))
-            p.kill()
+                self._log("killing parent process " + str(p))
+                p.kill()
+            except FileNotFoundError:
+                # this happens when pid is already gone, in which case we are done anyway
+                pass
+            except psutil.NoSuchProcess:
+                pass
 
+
+                
             self._proc = None
 
     def __del__(self):
