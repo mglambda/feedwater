@@ -20,6 +20,8 @@ setup(
     license_files=["LICENSE"],
     scripts=[],
     packages=find_packages(include=['feedwater']),
+    package_data={"feedwater":["py.typed"]},
+
     install_requires=["psutil"]
 )
 
