@@ -1,8 +1,9 @@
+from typing import *
 import subprocess, os, signal, threading, sys, psutil
 import atexit
 from queue import Queue, Empty
 
-def run(cmd, **kwargs):
+def run(cmd: str, **kwargs) -> 'Process':
     """Spawns a process with command CMD, executed in a shell environment in text mode. Returns a Process object. This function is non-blocking.
 
     Parameter
@@ -18,7 +19,7 @@ def run(cmd, **kwargs):
 class Process(object):
     """A subprocess that can run continuously and provides non-blocking interactions."""
 
-    def __init__(self, cmd, env=os.environ, verbose=False):
+    def __init__(self, cmd: str, env: os._Environ[str]=os.environ, verbose:bool=False):
         """Initialize and start a subprocess.
 
         Paramter
@@ -26,8 +27,8 @@ class Process(object):
         A string that will be executed in a shell environment, in text mode."""
         self.verbose = verbose
         self._proc = None
-        self.stderr_log = Queue()
-        self.stdout_log = Queue()
+        self.stderr_log = Queue() #type:ignore
+        self.stdout_log = Queue() #type:ignore
         self._exit_code = None
         if type(cmd) == type([]):
             cmdstring = " ".join(cmd)
@@ -88,11 +89,11 @@ class Process(object):
             if self._threads_stop.is_set():
                 return
             
-    def write_line(self, w):
+    def write_line(self, w: str) -> bool:
         """Like write, but adds a newline."""
         return self.write(w + "\n")
         
-    def write(self, w):
+    def write(self, w: str) -> bool:
         """Write data to the underlying process.
         Parameter
         w : str
@@ -104,6 +105,15 @@ class Process(object):
 
         if self._proc is None:
             return True
+
+        if self._proc.stdin is None:
+            return True
+
+        if self._proc.stdout is None:
+            return True
+
+        if self._proc.stderr is None:
+            return True
         
         self._proc.stdin.flush()
         self._proc.stdout.flush()
@@ -114,7 +124,7 @@ class Process(object):
         self._proc.stdout.flush()
         return False
 
-    def is_running(self):
+    def is_running(self) -> bool:
         """Returns true if the underlying process is still running. False if it has exited."""
         if not(self._proc):
             return False
@@ -123,18 +133,18 @@ class Process(object):
             return True
         return False
 
-    def exit_code(self):
+    def exit_code(self) -> Optional[int]:
         """Returns the exit code of the underlying process if it has finished. Otherwise returns None."""
         return self._exit_code
     
         
 
-    def get_error(self):
+    def get_error(self) -> List[str]:
         """Returns a list of lines from the stderr of the underlying process. This will empty the stderr queue. Will return empty list if process is not running. Use is_running() to check if process is still alive.
         This function is non-blocking."""
         return self._get_queue(self.stderr_log)
 
-    def get(self):
+    def get(self) -> List[str]:
         """Returns a list of lines from stdout of the underlying process. This will empty the stdout queue. Returns empty list if no new output is present or if the process is not running. Use is_running to check if the underlying process is still alive.
         This function is non-blocking."""
         return self._get_queue(self.stdout_log)
@@ -154,7 +164,7 @@ class Process(object):
         if self.verbose:
             print("feedwater: " + w, file=sys.stderr)
     
-    def close(self):
+    def close(self) -> None:
         # since shell=true spawns child processes that may still be running , we have to terminate by sending kill signal to entire process group
         if self._proc:
             try:
